@@ -4,6 +4,10 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef, useState } from "react";
 import { LUTS } from "@/lib/luts";
 import { SAMPLE_IMAGES, HERO_IMAGE } from "@/lib/sample-images";
+import { ApertureInline, ApertureStamp, Aperture } from "@/components/brand";
+
+const DISPLAY = '"Cormorant Garamond", "Cormorant", "EB Garamond", Georgia, serif';
+const MONO = "'IBM Plex Mono', monospace";
 
 export default function Darkroom() {
   const heroRef = useRef<HTMLDivElement>(null);
@@ -13,7 +17,7 @@ export default function Darkroom() {
 
   return (
     <main className="bg-[#0a0807] text-[#e8dfd1] min-h-screen overflow-x-hidden" style={{ fontFamily: "Inter, sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet" />
       <TopBar />
 
       {/* Hero — full-bleed photo with slow zoom + cinematic framing */}
@@ -50,12 +54,12 @@ export default function Darkroom() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.4, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="text-[clamp(4rem,12vw,12rem)] leading-[0.82] tracking-[-0.04em] max-w-6xl"
-            style={{ fontFamily: 'Fraunces, "DM Serif Display", Georgia, serif', fontWeight: 400 }}
+            className="text-[clamp(4rem,12vw,12rem)] leading-[0.85] tracking-[-0.02em] max-w-6xl"
+            style={{ fontFamily: DISPLAY, fontWeight: 400 }}
           >
             What the
             <br />
-            <em className="italic text-orange-200/95">light</em> remembers.
+            <em className="italic text-orange-200/95" style={{ fontWeight: 300 }}>light</em> remembers.
           </motion.h1>
         </div>
 
@@ -84,7 +88,7 @@ export default function Darkroom() {
       <section className="relative py-32 lg:py-56 px-8 lg:px-16 border-y border-stone-900">
         <div className="max-w-5xl mx-auto">
           <div className="font-mono text-[10px] tracking-[0.3em] uppercase text-orange-300/70 mb-8">— I —</div>
-          <p className="font-serif text-3xl lg:text-5xl leading-[1.2] tracking-[-0.01em]" style={{ fontFamily: "Fraunces, Georgia, serif" }}>
+          <p className="font-serif text-3xl lg:text-5xl leading-[1.2] tracking-[-0.01em]" style={{ fontFamily: DISPLAY }}>
             A LUT is a memory of light a photographer once decided to keep. We
             sell <em className="italic text-orange-200">memories</em>, not filters.
             Each one shaped by hand against twenty reference frames, tested on
@@ -99,7 +103,7 @@ export default function Darkroom() {
       {/* Plate cards */}
       <section className="relative py-32 px-8 lg:px-16">
         <div className="font-mono text-[10px] tracking-[0.3em] uppercase text-orange-300/70 mb-8">— II — The Plates</div>
-        <h2 className="font-serif text-6xl lg:text-8xl tracking-[-0.03em] mb-16 leading-[0.9]" style={{ fontFamily: "Fraunces, Georgia, serif" }}>
+        <h2 className="font-serif text-6xl lg:text-8xl tracking-[-0.03em] mb-16 leading-[0.9]" style={{ fontFamily: DISPLAY }}>
           Eight signatures
           <br />
           <em className="italic text-orange-200/90">graded in shadow.</em>
@@ -121,7 +125,7 @@ export default function Darkroom() {
                 Plate № {String(i + 1).padStart(2, "0")}
               </div>
               <div className="absolute bottom-0 inset-x-0 p-6">
-                <div className="font-serif text-3xl mb-1" style={{ fontFamily: "Fraunces, Georgia, serif" }}>{l.name}</div>
+                <div className="font-serif text-3xl mb-1" style={{ fontFamily: DISPLAY }}>{l.name}</div>
                 <div className="text-xs text-stone-400 tracking-wide">{l.family}</div>
               </div>
             </motion.div>
@@ -151,7 +155,7 @@ function Studio() {
   return (
     <section className="relative py-24 lg:py-32 px-4 lg:px-8 bg-gradient-to-b from-[#0a0807] via-[#0d0a08] to-[#0a0807]">
       <div className="font-mono text-[10px] tracking-[0.3em] uppercase text-orange-300/70 mb-8 px-4">— THE STUDIO —</div>
-      <h3 className="font-serif text-5xl lg:text-7xl tracking-[-0.02em] mb-12 px-4 leading-[0.95]" style={{ fontFamily: "Fraunces, Georgia, serif" }}>
+      <h3 className="font-serif text-5xl lg:text-7xl tracking-[-0.02em] mb-12 px-4 leading-[0.95]" style={{ fontFamily: DISPLAY }}>
         Built like a <em className="italic text-orange-200">working room.</em>
       </h3>
 
@@ -340,9 +344,11 @@ function TopBar() {
   return (
     <header className="fixed top-0 inset-x-0 z-50 backdrop-blur bg-black/30 border-b border-white/5">
       <nav className="h-14 px-6 lg:px-12 flex items-center justify-between">
-        <Link href="/mockups" className="text-xs tracking-[0.3em] uppercase text-stone-400 hover:text-white">← Mockups</Link>
-        <div className="font-serif text-base tracking-tight" style={{ fontFamily: "Fraunces, Georgia, serif" }}>Wildlight</div>
-        <div className="text-xs tracking-[0.3em] uppercase text-orange-200/70">01 · Darkroom</div>
+        <Link href="/mockups" className="text-[10px] tracking-[0.4em] uppercase text-stone-400 hover:text-white" style={{ fontFamily: MONO }}>← MOCKUPS</Link>
+        <Link href="/" className="text-[#e8dfd1] hover:opacity-80 transition">
+          <ApertureInline size={20} color="#e8dfd1" textClass="text-base" />
+        </Link>
+        <div className="text-[10px] tracking-[0.4em] uppercase text-orange-200/70" style={{ fontFamily: MONO }}>01 · DARKROOM</div>
       </nav>
     </header>
   );
@@ -350,18 +356,22 @@ function TopBar() {
 
 function Footer() {
   return (
-    <footer className="px-8 lg:px-16 py-16 border-t border-stone-900 mt-32">
-      <div className="grid lg:grid-cols-3 gap-8 mb-12">
+    <footer className="px-8 lg:px-16 py-20 border-t border-stone-900 mt-32 relative">
+      <div className="grid lg:grid-cols-[1fr_auto_1fr] items-center gap-12 mb-12">
         <div>
-          <div className="font-serif text-3xl mb-2" style={{ fontFamily: "Fraunces, Georgia, serif" }}>Wildlight</div>
-          <p className="text-sm text-stone-500 max-w-xs">Made in a quiet room. Tested in the rain.</p>
+          <p className="text-sm text-stone-500 max-w-xs leading-relaxed" style={{ fontFamily: DISPLAY, fontStyle: "italic", fontSize: "1.05rem" }}>
+            Made in a quiet room. Tested in the rain. Shipped only when the print survives.
+          </p>
         </div>
-        <div></div>
+        <ApertureStamp size={56} color="#e8dfd1" est="EST. 2026 · BROOKLYN" />
         <div className="text-right">
-          <Link href="/mockups" className="text-xs tracking-[0.25em] uppercase text-stone-400 hover:text-white">← Back to mockups</Link>
+          <Link href="/mockups" className="text-[10px] tracking-[0.4em] uppercase text-stone-400 hover:text-white" style={{ fontFamily: MONO }}>← BACK TO MOCKUPS</Link>
         </div>
       </div>
-      <div className="text-xs text-stone-600 font-mono">© Wildlight ⅩⅩⅥ · Volume 01 · No. ⅠⅠⅠ</div>
+      <div className="border-t border-stone-900 pt-6 flex flex-wrap items-center justify-between gap-4 text-[10px] tracking-[0.4em] uppercase text-stone-600" style={{ fontFamily: MONO }}>
+        <span>© WILDLIGHT MMXXVI · VOL. 01 · NO. III</span>
+        <span>SET IN CORMORANT GARAMOND &amp; IBM PLEX MONO</span>
+      </div>
     </footer>
   );
 }
