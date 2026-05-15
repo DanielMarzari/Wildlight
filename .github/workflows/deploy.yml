@@ -60,11 +60,6 @@ jobs:
               ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/apps/wildlight/public/
           fi
 
-      - name: Copy server.js wrapper
-        run: |
-          scp -i ~/.ssh/deploy_key server.js \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/apps/wildlight/server.js
-
       - name: Restart PM2
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
