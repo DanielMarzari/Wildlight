@@ -13,9 +13,10 @@ export default function Darkroom() {
 
   return (
     <main className="bg-[#0a0807] text-[#e8dfd1] min-h-screen overflow-x-hidden" style={{ fontFamily: "Inter, sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap" rel="stylesheet" />
       <TopBar />
 
-      {/* Hero — full-bleed photo with slow zoom */}
+      {/* Hero — full-bleed photo with slow zoom + cinematic framing */}
       <section ref={heroRef} className="relative h-[100svh] overflow-hidden">
         <motion.div style={{ scale: heroScale, opacity: heroFade }} className="absolute inset-0">
           <img src={HERO_IMAGE} alt="" className="w-full h-full object-cover" style={{ filter: "contrast(1.15) saturate(1.05) sepia(0.1) hue-rotate(-5deg)" }} />
@@ -25,30 +26,57 @@ export default function Darkroom() {
           <div className="absolute -top-32 -right-32 w-[60vw] h-[60vw] rounded-full bg-orange-700/30 blur-[160px]" />
         </motion.div>
 
-        <div className="relative h-full flex flex-col justify-end px-8 lg:px-16 pb-24">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.5, delay: 0.3 }} className="font-mono text-[10px] tracking-[0.4em] uppercase text-orange-200/80 mb-8">
-            ◊ Wildlight, est. 2026 ·  No. ⅠⅠⅠ
-          </motion.div>
+        {/* Framing ticks — at the safe area, not the bleed edge */}
+        <FrameTick className="top-20 left-8 lg:top-24 lg:left-16" rot={0} />
+        <FrameTick className="top-20 right-8 lg:top-24 lg:right-16" rot={90} />
+        <FrameTick className="bottom-20 right-8 lg:bottom-24 lg:right-16" rot={180} />
+        <FrameTick className="bottom-20 left-8 lg:bottom-24 lg:left-16" rot={270} />
+
+        {/* HUD — top */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 0.6 }}
+          className="absolute top-20 lg:top-24 inset-x-12 lg:inset-x-24 flex items-center justify-between text-[10px] tracking-[0.4em] uppercase text-white/55"
+          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+        >
+          <span className="flex items-center gap-2">
+            <span className="block w-1.5 h-1.5 rounded-full bg-orange-300/80" />
+            A WILDLIGHT GRADE · 2026
+          </span>
+          <span>VOL. 01 · NO. III · SPRING</span>
+        </motion.div>
+
+        <div className="relative h-full flex flex-col justify-end px-12 lg:px-24 pb-28">
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.4, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="font-serif text-[clamp(4rem,12vw,12rem)] leading-[0.82] tracking-[-0.04em] max-w-6xl"
-            style={{ fontFamily: 'Fraunces, "DM Serif Display", Georgia, serif' }}
+            className="text-[clamp(4rem,12vw,12rem)] leading-[0.82] tracking-[-0.04em] max-w-6xl"
+            style={{ fontFamily: 'Fraunces, "DM Serif Display", Georgia, serif', fontWeight: 400 }}
           >
             What the
             <br />
             <em className="italic text-orange-200/95">light</em> remembers.
           </motion.h1>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 2, delay: 1.5 }} className="mt-12 grid grid-cols-3 gap-10 max-w-3xl text-xs text-stone-400">
-            <Hgrp label="Vol." val="01" />
-            <Hgrp label="Frame" val="14 / 240" />
-            <Hgrp label="Exposure" val="ƒ8 · 1/125 · ISO 200" />
-          </motion.div>
         </div>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2 }} className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs tracking-[0.3em] uppercase text-stone-500">
-          ↓ Enter the darkroom
+        {/* HUD — bottom: technical metadata strip */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 1.2 }}
+          className="absolute bottom-20 lg:bottom-24 inset-x-12 lg:inset-x-24 flex flex-wrap items-center justify-between gap-6 text-[10px] tracking-[0.4em] uppercase text-white/55"
+          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+        >
+          <div className="flex flex-wrap items-center gap-6">
+            <span>EI 200</span>
+            <span className="text-white/25">·</span>
+            <span>ƒ8</span>
+            <span className="text-white/25">·</span>
+            <span>1/125</span>
+            <span className="text-white/25">·</span>
+            <span>3200K</span>
+            <span className="text-white/25">·</span>
+            <span>RAW / REC.2020</span>
+          </div>
+          <span>FRAME 014 / 240</span>
         </motion.div>
       </section>
 
@@ -106,11 +134,12 @@ export default function Darkroom() {
   );
 }
 
-function Hgrp({ label, val }: { label: string; val: string }) {
+function FrameTick({ className, rot }: { className: string; rot: number }) {
   return (
-    <div>
-      <div className="text-[10px] tracking-[0.3em] uppercase text-stone-500 mb-1">{label}</div>
-      <div className="font-mono text-sm text-stone-200">{val}</div>
+    <div className={`absolute pointer-events-none ${className}`}>
+      <svg width="28" height="28" style={{ transform: `rotate(${rot}deg)` }}>
+        <path d="M 0 0 L 22 0 M 0 0 L 0 22" stroke="white" strokeWidth={1} opacity={0.7} />
+      </svg>
     </div>
   );
 }
