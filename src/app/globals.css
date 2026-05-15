@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,30..100,0..1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  --ember-glow: 255 122 31;
+  --twilight: 127 99 209;
+  --paper: 246 240 230;
+}
+
+html, body {
+  background: #08080b;
+  color: #f6f0e6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: rgba(255,122,31,0.35); color: #fff; }
+
+.font-display { font-family: "Fraunces", Georgia, serif; font-optical-sizing: auto; }
+.font-sans { font-family: "Inter", system-ui, sans-serif; }
+
+/* Film grain overlay using SVG */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.08;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  animation: grain 8s steps(10) infinite;
+}
+
+@keyframes grain {
+  0%, 100% { transform: translate(0,0); }
+  10% { transform: translate(-2%,-3%); }
+  20% { transform: translate(-4%,2%); }
+  30% { transform: translate(2%,-4%); }
+  40% { transform: translate(-2%,5%); }
+  50% { transform: translate(-4%,2%); }
+  60% { transform: translate(5%,0); }
+  70% { transform: translate(0,3%); }
+  80% { transform: translate(-5%,0); }
+  90% { transform: translate(3%,2%); }
+}
+
+/* Aurora gradient mesh */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora::before, .aurora::after {
+  content: "";
+  position: absolute;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.5;
+  animation: drift 24s ease-in-out infinite alternate;
+}
+.aurora::before {
+  background: radial-gradient(circle, rgba(255,122,31,0.55), transparent 60%);
+  top: -20vw;
+  left: -10vw;
+}
+.aurora::after {
+  background: radial-gradient(circle, rgba(127,99,209,0.45), transparent 60%);
+  bottom: -25vw;
+  right: -15vw;
+  animation-delay: -12s;
+}
+
+@keyframes drift {
+  0% { transform: translate(0,0) scale(1); }
+  100% { transform: translate(8vw, -4vw) scale(1.15); }
+}
+
+.text-glow { text-shadow: 0 0 60px rgba(255,122,31,0.25); }
+
+.hairline { background-image: linear-gradient(90deg, transparent, rgba(246,240,230,0.4), transparent); height: 1px; }
+
+.card-glow {
+  background: radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(255,122,31,0.18), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.group:hover .card-glow { opacity: 1; }
+
+.scroll-marquee {
+  display: flex;
+  gap: 4rem;
+  animation: marquee 40s linear infinite;
+  width: max-content;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.7s;
+  z-index: -1;
+}
+.btn-primary:hover::before { transform: translateX(100%); }
+
+input[type="range"].lut-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"].lut-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 2px;
+  height: 100%;
+  background: #fff;
+  cursor: ew-resize;
+  box-shadow: 0 0 24px rgba(255,255,255,0.7);
+}
+input[type="range"].lut-slider::-moz-range-thumb {
+  width: 2px;
+  height: 100%;
+  background: #fff;
+  cursor: ew-resize;
+  border: none;
+}
