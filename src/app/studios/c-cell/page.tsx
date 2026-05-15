@@ -119,7 +119,6 @@ export default function Cell() {
         {TOOLS.map((b) => (
           <button
             key={b.id}
-            onMouseEnter={() => setPanel(b.id)}
             onClick={() => setPanel(panel === b.id ? "none" : b.id)}
             className={`group relative w-12 h-12 rounded-sm border flex items-center justify-center transition ${panel === b.id ? "bg-orange-300 text-black border-orange-300" : "bg-black/60 backdrop-blur border-white/15 hover:border-white/40 text-white/70"}`}
             style={{ fontFamily: MONO }}
@@ -128,7 +127,6 @@ export default function Cell() {
               {b.glyph}
               <span className="text-[9px] tracking-[0.15em] mt-0.5">{b.label}</span>
             </div>
-            {/* Hover label */}
             <span className={`absolute left-full ml-2 px-2 py-1 rounded-sm whitespace-nowrap text-[10px] tracking-[0.3em] uppercase pointer-events-none transition-opacity ${panel === b.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"} bg-black/80 backdrop-blur border border-white/10 text-white/80`}>
               {b.n} · {fullName(b.id)}
             </span>
@@ -186,33 +184,18 @@ export default function Cell() {
 
       {/* ===== BOTTOM DOCK ===== */}
       <div className="absolute bottom-0 inset-x-0 z-30 bg-black/70 backdrop-blur-md border-t border-white/10 h-20 flex items-stretch" style={{ fontFamily: MONO }}>
-        {/* Left: filmstrip */}
-        <div className="flex-1 min-w-0 flex items-center gap-1 px-4 overflow-x-auto">
-          <span className="text-[9px] tracking-[0.3em] uppercase text-white/45 mr-2 shrink-0">FRAMES</span>
-          {[...SAMPLE_IMAGES, ...SAMPLE_IMAGES].slice(0, 14).map((s, i) => (
-            <button
-              key={i}
-              onClick={() => setImg(s)}
-              className={`shrink-0 relative h-12 aspect-[4/3] overflow-hidden rounded-sm ring-1 transition ${s.id === img.id && i < 6 ? "ring-orange-300 ring-2" : "ring-white/15 hover:ring-white/40"}`}
-            >
-              <img src={s.url} alt="" className="w-full h-full object-cover" />
-              <span className="absolute bottom-0 right-0.5 text-[8px] text-white/90">{String(i + 1).padStart(2, "0")}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Center: current LUT pill */}
-        <div className="px-4 flex items-center gap-3 border-l border-r border-white/10 shrink-0">
-          <span className="flex gap-0.5">{lut.swatch.map((c, ci) => <span key={ci} className="w-1.5 h-8 rounded-sm" style={{ background: c }} />)}</span>
+        {/* Left: current LUT pill */}
+        <div className="px-5 flex items-center gap-3 shrink-0">
+          <span className="flex gap-0.5">{lut.swatch.map((c, ci) => <span key={ci} className="w-1.5 h-9 rounded-sm" style={{ background: c }} />)}</span>
           <div className="leading-tight">
-            <div className="text-xs tracking-[-0.01em]" style={{ fontFamily: DISPLAY, fontStyle: "italic", fontSize: "1.05rem" }}>{lut.name}</div>
+            <div className="tracking-[-0.01em]" style={{ fontFamily: DISPLAY, fontStyle: "italic", fontSize: "1.2rem" }}>{lut.name}</div>
             <div className="text-[9px] tracking-[0.3em] uppercase text-white/45 mt-0.5">{lut.family} · {intensity}%</div>
           </div>
         </div>
 
-        {/* Right: LUT swatch reel */}
-        <div className="flex items-center gap-1 px-4 overflow-x-auto shrink-0 max-w-md">
-          <span className="text-[9px] tracking-[0.3em] uppercase text-white/45 mr-2">LUT</span>
+        {/* Center: LUT preview reel */}
+        <div className="flex-1 min-w-0 flex items-center gap-1 px-4 overflow-x-auto border-l border-white/10">
+          <span className="text-[9px] tracking-[0.3em] uppercase text-white/45 mr-2 shrink-0">LUT</span>
           {LUTS.map((l) => (
             <button
               key={l.id}
@@ -227,20 +210,39 @@ export default function Cell() {
             </button>
           ))}
         </div>
+
+        {/* Right: metadata strip */}
+        <div className="px-5 flex flex-col items-end justify-center shrink-0 border-l border-white/10 text-right text-[10px] tracking-[0.4em] uppercase text-white/55 gap-1">
+          <div className="flex items-center gap-2">
+            <span>EI 200</span><span className="text-white/25">·</span>
+            <span>ƒ8</span><span className="text-white/25">·</span>
+            <span>1/125</span><span className="text-white/25">·</span>
+            <span>3200K</span>
+          </div>
+          <div className="flex items-center gap-2 text-white/45">
+            <span>RAW</span><span className="text-white/25">·</span>
+            <span>16-BIT REC.2020</span>
+          </div>
+        </div>
       </div>
 
-      {/* ===== SLIDE-IN PANELS ===== */}
-      <AnimatePresence>
+      {/* ===== POPOVER PANELS — click toggles, fade up ===== */}
+      <AnimatePresence mode="wait">
         {panel !== "none" && (
           <motion.aside
             key={panel}
-            initial={{ x: -380, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -380, opacity: 0 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 16, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="absolute left-20 top-32 z-40 w-80 max-h-[60vh] bg-black/85 backdrop-blur-xl border border-white/10 rounded-sm overflow-y-auto shadow-2xl"
-            onMouseLeave={() => setPanel("none")}
           >
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2.5 bg-black/85 backdrop-blur border-b border-white/10" style={{ fontFamily: MONO }}>
+              <span className="text-[10px] tracking-[0.3em] uppercase text-orange-200/90">
+                {TOOLS.find((t) => t.id === panel)?.n} · {fullName(panel)}
+              </span>
+              <button onClick={() => setPanel("none")} className="text-white/40 hover:text-white text-base leading-none">✕</button>
+            </div>
             {panel === "library" && <LibraryPanel img={img} setImg={setImg} />}
             {panel === "luts" && <LutsPanel lut={lut} setLut={setLut} />}
             {panel === "adjust" && <AdjustPanel />}

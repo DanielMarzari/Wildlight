@@ -4,11 +4,11 @@ export const metadata = { title: "Mockups · Wildlight" };
 
 const MOCKUPS = [
   {
-    slug: "01-darkroom",
+    slug: "../",
     name: "Darkroom",
-    tag: "Cinematic / Ember",
+    tag: "CINEMATIC / EMBER · CHOSEN — NOW LIVE AT /",
     blurb:
-      "A photographer's darkroom. Deep blacks, ember safelight, slow scroll-driven storytelling. Studio feels like Capture One — histogram, curves, scopes, side filmstrip.",
+      "A photographer's darkroom. Deep blacks, ember safelight, slow scroll-driven storytelling. This is the direction we shipped — it's the homepage now.",
     accent: "from-amber-700/40 via-amber-900/30 to-stone-950",
     image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=900&q=80",
   },
@@ -76,7 +76,7 @@ export default function MockupIndex() {
         {MOCKUPS.map((m, i) => (
           <Link
             key={m.slug}
-            href={`/mockups/${m.slug}`}
+            href={m.slug.startsWith("../") ? "/" : `/mockups/${m.slug}`}
             className="group relative block rounded-2xl overflow-hidden ring-1 ring-white/10 hover:ring-white/30 transition-all"
           >
             <div className="aspect-[4/5] relative">
