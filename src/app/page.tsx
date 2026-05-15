@@ -187,7 +187,7 @@ function Studio() {
 
         {/* Tool bar */}
         <div className="h-12 bg-[#161210] border-b border-stone-800 flex items-center px-4 gap-1 text-stone-400 text-xs">
-          {["Library", "Develop", "Grade", "Export"].map((t, i) => (
+          {["Album", "Develop", "Grade", "Export"].map((t, i) => (
             <button key={t} className={`px-3 py-1.5 rounded ${i === 2 ? "bg-orange-700/30 text-orange-200" : "hover:bg-stone-800"}`}>{t}</button>
           ))}
           <div className="w-px h-5 bg-stone-800 mx-2" />
@@ -359,10 +359,10 @@ function TopBar() {
           <ApertureInline size={20} color="#e8dfd1" textClass="text-base" />
         </Link>
         <div className="hidden md:flex items-center gap-8 text-[10px] tracking-[0.4em] uppercase text-stone-400" style={{ fontFamily: MONO }}>
-          <a href="#library" className="hover:text-white transition">LIBRARY</a>
+          <Link href="/album" className="hover:text-white transition">ALBUM</Link>
+          <Link href="/atelier" className="hover:text-white transition">ATELIER</Link>
           <Link href="/studios/c-cell" className="hover:text-white transition">STUDIO</Link>
           <a href="#process" className="hover:text-white transition">PROCESS</a>
-          <a href="#pricing" className="hover:text-white transition">PRICING</a>
         </div>
         <Link href="/studios/c-cell" className="text-[10px] tracking-[0.4em] uppercase border border-white/15 hover:border-white/40 px-4 py-2 rounded-sm transition text-white/90" style={{ fontFamily: MONO }}>
           OPEN STUDIO →
@@ -384,7 +384,8 @@ function Footer() {
         <ApertureStamp size={56} color="#e8dfd1" est="EST. 2026 · BROOKLYN" />
         <div className="text-right text-[10px] tracking-[0.4em] uppercase text-stone-400" style={{ fontFamily: MONO }}>
           <div className="space-y-2">
-            <a href="#library" className="block hover:text-white transition">LIBRARY</a>
+            <Link href="/album" className="block hover:text-white transition">ALBUM</Link>
+            <Link href="/atelier" className="block hover:text-white transition">ATELIER</Link>
             <Link href="/studios/c-cell" className="block hover:text-white transition">STUDIO</Link>
             <Link href="/logos" className="block hover:text-white transition">LOGOS</Link>
           </div>
