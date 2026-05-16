@@ -7,6 +7,9 @@ import { SAMPLE_IMAGES, exifLine } from "@/lib/sample-images";
 import { ApertureInline, ApertureStamp } from "@/components/brand";
 import { CornerTick, Histogram, ToneCurve, PanelTitle } from "@/components/studio-chrome";
 import { loadCustomLuts, saveCustomLut, deleteCustomLut, filterToCube, downloadFile, type CustomLut } from "@/lib/lut-io";
+import { WebGLCanvas, type WebGLCanvasHandle } from "@/components/WebGLCanvas";
+import { loadImageFile, isRawFilename, type ParsedExif } from "@/lib/image-io";
+import { type Adjust as GLAdjust } from "@/lib/lut-engine";
 
 const MONO = "'IBM Plex Mono', monospace";
 const DISPLAY = '"Cormorant Garamond", "Cormorant", Georgia, serif';
@@ -66,28 +69,63 @@ export default function DesignPage() {
   const [state, setState] = useState<State>(DEFAULT);
   const [imgIdx, setImgIdx] = useState(3);
   const [customImg, setCustomImg] = useState<string | null>(null);
+  const [customImgLabel, setCustomImgLabel] = useState<string>("");
+  const [customExif, setCustomExif] = useState<ParsedExif | null>(null);
   const [name, setName] = useState("Untitled grade");
   const [family, setFamily] = useState<Family>("Cinematic");
   const [swatch, setSwatch] = useState<[string, string, string]>(SWATCH_PRESETS[0].colors);
   const [customLuts, setCustomLuts] = useState<CustomLut[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<WebGLCanvasHandle>(null);
 
   useEffect(() => { setCustomLuts(loadCustomLuts()); }, []);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2400); return () => clearTimeout(id); }, [toast]);
 
+  // Drag/drop on the whole document
+  useEffect(() => {
+    const onOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      const f = e.dataTransfer?.files?.[0];
+      if (f) onPickFile(f);
+    };
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("drop", onDrop);
+    return () => { window.removeEventListener("dragover", onOver); window.removeEventListener("drop", onDrop); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const previewSrc = customImg ?? SAMPLE_IMAGES[imgIdx % SAMPLE_IMAGES.length].url;
   const previewMeta = customImg ? null : SAMPLE_IMAGES[imgIdx % SAMPLE_IMAGES.length];
 
+  // CSS filter chain for the cube generation + dock thumbs (thumbs stay CSS for speed)
   const composedFilter = composeDesignFilter(state);
+  // What we feed to the WebGL cube: everything except the basic uniforms
+  const cubeOnlyFilter = composeCubeFilter(state);
+  const glAdjust = stateToGLAdjust(state);
 
   const reset = () => { setState(DEFAULT); setToast("RESET"); };
 
-  const onPickFile = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => { setCustomImg(e.target?.result as string); setToast(`LOADED · ${file.name}`); };
-    reader.readAsDataURL(file);
+  const onPickFile = useCallback(async (file: File) => {
+    if (isRawFilename(file.name)) {
+      setToast(`RAW · PREVIEW NOT YET SUPPORTED · ${file.name.toUpperCase()}`);
+      return;
+    }
+    if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif|gif|tiff?)$/i.test(file.name)) return;
+    setLoading(true);
+    try {
+      const loaded = await loadImageFile(file);
+      setCustomImg(loaded.url);
+      setCustomImgLabel(loaded.filename.replace(/\.[^.]+$/, "").replaceAll("_", " "));
+      setCustomExif(loaded.exif);
+      setToast(`LOADED · ${loaded.isHeic ? "HEIC → JPEG · " : ""}${file.name}`);
+    } catch {
+      setToast(`LOAD FAILED · ${file.name}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const save = async () => {
@@ -168,39 +206,62 @@ export default function DesignPage() {
         {/* Preview */}
         <div className="bg-[#080605] flex flex-col">
           <div className="px-6 py-3 border-b border-stone-900 flex items-center justify-between text-[10px] tracking-[0.4em] uppercase text-stone-500" style={{ fontFamily: MONO }}>
-            <span>LIVE PREVIEW · {state.channel !== "off" ? state.channel.toUpperCase() + " MAP" : "BASE GRADE"}</span>
-            <button onClick={() => fileRef.current?.click()} className="text-orange-200/80 hover:text-orange-100">+ YOUR IMAGE</button>
+            <span className="flex items-center gap-2">
+              <span className="block w-1.5 h-1.5 rounded-full bg-orange-300 animate-pulse" />
+              LIVE PREVIEW · WEBGL · {state.channel !== "off" ? state.channel.toUpperCase() + " MAP" : "BASE GRADE"}
+            </span>
+            <div className="flex items-center gap-3">
+              {customImg && (
+                <button onClick={() => { setCustomImg(null); setCustomExif(null); setCustomImgLabel(""); }} className="text-stone-400 hover:text-white">← TEST SCENES</button>
+              )}
+              <button onClick={() => fileRef.current?.click()} className="px-3 py-1 rounded-sm bg-orange-300 hover:bg-orange-200 text-black tracking-[0.3em]">
+                + YOUR IMAGE
+              </button>
+            </div>
           </div>
           <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
-            <div className="relative max-w-full">
+            <div className="relative max-w-full flex items-center justify-center">
               <CornerTick className="-top-3 -left-3" rot={0} />
               <CornerTick className="-top-3 -right-3" rot={90} />
               <CornerTick className="-bottom-3 -right-3" rot={180} />
               <CornerTick className="-bottom-3 -left-3" rot={270} />
-              <img
-                src={previewSrc}
-                alt=""
-                className="block max-w-full max-h-[58vh] object-contain shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] transition-[filter] duration-150"
-                style={{ filter: composedFilter }}
+              <WebGLCanvas
+                ref={canvasRef}
+                imageUrl={previewSrc}
+                filterChain={cubeOnlyFilter}
+                cubeKey={`design-${state.baseLut ?? ""}-${state.bandMaps.length}-${state.liftR}-${state.liftG}-${state.liftB}-${state.gainR}-${state.gainG}-${state.gainB}-${state.fade}-${state.bandMaps.map((m) => `${m.source}>${m.target}@${m.amount}`).join(",")}`}
+                adjust={glAdjust}
+                channel={state.channel}
+                className="block max-w-full max-h-[58vh] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)]"
+                onError={() => setToast("WEBGL · INIT FAILED")}
               />
             </div>
           </div>
 
-          {/* Bottom — test scene picker (only when no custom upload) */}
-          <div className="px-6 py-4 border-t border-stone-900 flex items-center gap-3" style={{ fontFamily: MONO }}>
-            <span className="text-[10px] tracking-[0.4em] uppercase text-stone-500 shrink-0">{customImg ? "YOUR IMAGE" : "TEST SCENE"}</span>
+          {/* Bottom — meta strip (real EXIF for uploads, test scene picker otherwise) */}
+          <div className="px-6 py-4 border-t border-stone-900 flex items-center gap-3 flex-wrap" style={{ fontFamily: MONO }}>
             {customImg ? (
-              <button onClick={() => setCustomImg(null)} className="text-[10px] tracking-[0.3em] uppercase text-stone-400 hover:text-white">USE TEST SCENES →</button>
+              <>
+                <span className="text-[10px] tracking-[0.4em] uppercase text-orange-200/80 shrink-0">{customImgLabel.toUpperCase() || "YOUR IMAGE"}</span>
+                {customExif?.camera && <span className="text-[10px] tracking-[0.4em] uppercase text-white/55">{customExif.camera.toUpperCase()}</span>}
+                {customExif?.lens && <span className="text-[10px] tracking-[0.4em] uppercase text-white/45">· {customExif.lens.toUpperCase()}</span>}
+                <span className="text-[10px] tracking-[0.4em] uppercase text-white/45 ml-auto truncate">
+                  {[customExif?.focal, customExif?.aperture, customExif?.shutter, customExif?.ei, customExif?.wb, customExif?.date].filter(Boolean).join(" · ") || "NO METADATA"}
+                </span>
+              </>
             ) : (
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                {SAMPLE_IMAGES.map((s, i) => (
-                  <button key={s.id} onClick={() => setImgIdx(i)} className={`shrink-0 relative h-9 aspect-[4/3] overflow-hidden rounded-sm ring-1 transition ${i === imgIdx ? "ring-violet-300 ring-2" : "ring-white/15 hover:ring-white/40"}`}>
-                    <img src={s.url} alt="" className="w-full h-full object-cover" style={{ filter: composedFilter }} />
-                  </button>
-                ))}
-              </div>
+              <>
+                <span className="text-[10px] tracking-[0.4em] uppercase text-stone-500 shrink-0">TEST SCENE</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto">
+                  {SAMPLE_IMAGES.map((s, i) => (
+                    <button key={s.id} onClick={() => setImgIdx(i)} className={`shrink-0 relative h-9 aspect-[4/3] overflow-hidden rounded-sm ring-1 transition ${i === imgIdx ? "ring-violet-300 ring-2" : "ring-white/15 hover:ring-white/40"}`}>
+                      <img src={s.url} alt="" className="w-full h-full object-cover" style={{ filter: composedFilter }} />
+                    </button>
+                  ))}
+                </div>
+                {previewMeta && <span className="ml-auto text-[10px] tracking-[0.3em] uppercase text-stone-500 truncate">{previewMeta.caption.toUpperCase()} · {exifLine(previewMeta)}</span>}
+              </>
             )}
-            {previewMeta && <span className="ml-auto text-[10px] tracking-[0.3em] uppercase text-stone-500 truncate">{previewMeta.caption.toUpperCase()} · {exifLine(previewMeta)}</span>}
           </div>
         </div>
 
@@ -378,12 +439,14 @@ export default function DesignPage() {
 
 /* ============== Helpers ============== */
 
+/**
+ * Full CSS filter chain — used for thumbnails (test-scene picker reel,
+ * saved-design cards) where we want a fast CSS-filter-only render.
+ */
 function composeDesignFilter(s: State): string {
   const parts: string[] = [];
   if (s.channel === "ir") parts.push("url(#design-ir)");
   if (s.channel === "uv") parts.push("url(#design-uv)");
-
-  // base
   parts.push(`brightness(${s.exposure / 100})`);
   parts.push(`contrast(${s.contrast / 100})`);
   parts.push(`saturate(${s.saturation / 100})`);
@@ -391,49 +454,74 @@ function composeDesignFilter(s: State): string {
   if (s.warmth !== 0) parts.push(`hue-rotate(${s.warmth * -0.4}deg)`);
   if (s.sepia > 0) parts.push(`sepia(${s.sepia / 100})`);
   if (s.grayscale > 0) parts.push(`grayscale(${s.grayscale / 100})`);
-
-  // Band remaps — each map contributes a weighted hue rotation in the direction
-  // of (target.hue - source.hue). Multiple maps stack and average; we also
-  // bump saturation slightly to make the remapped band more visible.
-  // Full pixel-accurate per-band remapping requires a WebGL pipeline; this is
-  // the closest workable CSS approximation.
-  if (s.bandMaps.length > 0) {
-    let totalDelta = 0;
-    let totalWeight = 0;
-    for (const m of s.bandMaps) {
-      const src = BANDS.find((b) => b.key === m.source)!;
-      const dst = BANDS.find((b) => b.key === m.target)!;
-      let delta = dst.hue - src.hue;
-      // shortest path around the hue wheel
-      if (delta > 180) delta -= 360;
-      if (delta < -180) delta += 360;
-      const w = m.amount / 100;
-      totalDelta += delta * w;
-      totalWeight += w;
-    }
-    if (totalWeight > 0) {
-      const avg = totalDelta / Math.max(1, totalWeight);
-      const intensity = Math.min(1, totalWeight / s.bandMaps.length);
-      parts.push(`hue-rotate(${(avg * intensity * 0.45).toFixed(2)}deg)`);
-      if (intensity > 0.3) parts.push(`saturate(${(1 + intensity * 0.15).toFixed(3)})`);
-    }
-  }
-
-  // base LUT
+  parts.push(bandMapsFilter(s.bandMaps));
   if (s.baseLut) {
     const base: Lut | undefined = LUTS.find((l) => l.id === s.baseLut);
     if (base) parts.push(base.filter);
   }
+  parts.push(liftGainFilter(s));
+  return parts.filter(Boolean).join(" ");
+}
 
-  // Lift/Gain tints — we don't have true 3-way wheels; approximate by stacking
-  // small hue/brightness/saturation nudges proportional to the dominant axis.
+/**
+ * The cube-only portion: only the parts that the WebGL pipeline shouldn't
+ * double-apply via its own uniforms. Basic exposure / contrast / saturation /
+ * warmth / hue / sepia / grayscale are handled by the shader directly; here we
+ * keep the LUT-shaped parts (base LUT, band remaps, lift/gain tints).
+ */
+function composeCubeFilter(s: State): string {
+  const parts: string[] = [];
+  parts.push(bandMapsFilter(s.bandMaps));
+  if (s.baseLut) {
+    const base: Lut | undefined = LUTS.find((l) => l.id === s.baseLut);
+    if (base) parts.push(base.filter);
+  }
+  parts.push(liftGainFilter(s));
+  return parts.filter(Boolean).join(" ") || "none";
+}
+
+function bandMapsFilter(maps: BandMap[]): string {
+  if (maps.length === 0) return "";
+  let totalDelta = 0;
+  let totalWeight = 0;
+  for (const m of maps) {
+    const src = BANDS.find((b) => b.key === m.source)!;
+    const dst = BANDS.find((b) => b.key === m.target)!;
+    let delta = dst.hue - src.hue;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    const w = m.amount / 100;
+    totalDelta += delta * w;
+    totalWeight += w;
+  }
+  if (totalWeight <= 0) return "";
+  const avg = totalDelta / Math.max(1, totalWeight);
+  const intensity = Math.min(1, totalWeight / maps.length);
+  const out = [`hue-rotate(${(avg * intensity * 0.45).toFixed(2)}deg)`];
+  if (intensity > 0.3) out.push(`saturate(${(1 + intensity * 0.15).toFixed(3)})`);
+  return out.join(" ");
+}
+
+function liftGainFilter(s: State): string {
   const lift = s.liftR - (s.liftG + s.liftB) / 2;
   const gain = s.gainR - (s.gainG + s.gainB) / 2;
-  if (Math.abs(lift) + Math.abs(gain) > 0) {
-    parts.push(`hue-rotate(${(lift + gain) * 0.15}deg)`);
-  }
+  return Math.abs(lift) + Math.abs(gain) > 0
+    ? `hue-rotate(${(lift + gain) * 0.15}deg)`
+    : "";
+}
 
-  return parts.filter(Boolean).join(" ");
+/** State percent values → WebGL uniform values. */
+function stateToGLAdjust(s: State): GLAdjust {
+  return {
+    exposure: s.exposure / 100,
+    contrast: s.contrast / 100,
+    saturation: s.saturation / 100,
+    warmth: s.warmth / 30,
+    hue: s.hue / 30,
+    sepia: s.sepia / 100,
+    grayscale: s.grayscale / 100,
+    intensity: 1,
+  };
 }
 
 function BandRemapSection({ bandMaps, onAdd, onUpdate, onRemove }: { bandMaps: BandMap[]; onAdd: (m: BandMap) => void; onUpdate: (id: string, patch: Partial<BandMap>) => void; onRemove: (id: string) => void }) {

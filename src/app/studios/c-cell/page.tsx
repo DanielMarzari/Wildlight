@@ -5,7 +5,10 @@ import Link from "next/link";
 import { LUTS, type Lut } from "@/lib/luts";
 import { CornerTick, PanelTitle, Histogram, ToneCurve } from "@/components/studio-chrome";
 import { ApertureInline } from "@/components/brand";
-import { loadCustomLuts, saveCustomLut, deleteCustomLut, parseCube, cubeToFilter, filterToCube, downloadFile, exportPng, type CustomLut } from "@/lib/lut-io";
+import { loadCustomLuts, saveCustomLut, deleteCustomLut, parseCube, cubeToFilter, type CustomLut } from "@/lib/lut-io";
+import { WebGLCanvas, type WebGLCanvasHandle } from "@/components/WebGLCanvas";
+import { loadImageFile, isRawFilename, type ParsedExif } from "@/lib/image-io";
+import { type Adjust as GLAdjust } from "@/lib/lut-engine";
 
 const MONO = "'IBM Plex Mono', monospace";
 const DISPLAY = '"Cormorant Garamond", "Cormorant", Georgia, serif';
@@ -40,13 +43,15 @@ export default function Cell() {
   const [lut, setLut] = useState<Lut | CustomLut>(LUTS[7]);
   const [imgSrc, setImgSrc] = useState<string>("");
   const [imgLabel, setImgLabel] = useState<string>("");
+  const [exif, setExif] = useState<ParsedExif | null>(null);
+  const [imgDims, setImgDims] = useState<{ w: number; h: number } | null>(null);
   const [panel, setPanel] = useState<PanelId>("none");
   const [adj, setAdj] = useState<Adjust>(DEFAULT_ADJ);
   const [showOriginal, setShowOriginal] = useState(false);
-  const [extraFilter, setExtraFilter] = useState<string>(""); // for DESIGN: IR/UV effects
   const [toast, setToast] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const imgRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<WebGLCanvasHandle>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cubeInputRef = useRef<HTMLInputElement>(null);
@@ -57,19 +62,38 @@ export default function Cell() {
   // Toast auto-clear
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2400); return () => clearTimeout(id); }, [toast]);
 
-  // Compose the actual filter applied to the <img>
-  const composedFilter = composeFilter(adj, lut.filter, extraFilter, showOriginal);
+  // WebGL adjustment uniforms — derived from the studio's percentage state.
+  const glAdjust: GLAdjust = {
+    exposure:   showOriginal ? 1 : adj.exposure / 100,
+    contrast:   showOriginal ? 1 : adj.contrast / 100,
+    saturation: showOriginal ? 1 : adj.saturation / 100,
+    warmth:     showOriginal ? 0 : adj.warmth / 30,
+    hue:        0,
+    sepia:      0,
+    grayscale:  0,
+    intensity:  showOriginal ? 0 : adj.intensity / 100,
+  };
 
   /* --- File handlers --- */
-  const handleImageFile = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImgSrc(e.target?.result as string);
-      setImgLabel(file.name.replace(/\.[^.]+$/, "").replaceAll("_", " "));
-      setToast(`LOADED · ${file.name}`);
-    };
-    reader.readAsDataURL(file);
+  const handleImageFile = useCallback(async (file: File) => {
+    if (isRawFilename(file.name)) {
+      setToast(`RAW · PREVIEW NOT YET SUPPORTED · ${file.name.toUpperCase()}`);
+      return;
+    }
+    if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif|gif|tiff?)$/i.test(file.name)) return;
+    setLoading(true);
+    try {
+      const loaded = await loadImageFile(file);
+      setImgSrc(loaded.url);
+      setImgLabel(loaded.filename.replace(/\.[^.]+$/, "").replaceAll("_", " "));
+      setExif(loaded.exif);
+      setImgDims({ w: loaded.width, h: loaded.height });
+      setToast(`LOADED · ${loaded.isHeic ? "HEIC → JPEG · " : ""}${file.name}`);
+    } catch (e) {
+      setToast(`LOAD FAILED · ${file.name}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const handleCubeFile = useCallback((file: File) => {
@@ -105,63 +129,20 @@ export default function Cell() {
       e.preventDefault();
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      if (file.type.startsWith("image/")) handleImageFile(file);
-      else if (file.name.toLowerCase().endsWith(".cube")) handleCubeFile(file);
+      if (file.name.toLowerCase().endsWith(".cube")) handleCubeFile(file);
+      else handleImageFile(file);
     };
     window.addEventListener("dragover", onOver);
     window.addEventListener("drop", onDrop);
     return () => { window.removeEventListener("dragover", onOver); window.removeEventListener("drop", onDrop); };
   }, [handleImageFile, handleCubeFile]);
 
-  /* --- DESIGN: IR/UV/save/export --- */
-  const setDesignEffect = (kind: "none" | "ir" | "uv") => {
-    setExtraFilter(kind === "none" ? "" : `url(#wildlight-${kind})`);
-    setToast(kind === "none" ? "DESIGN · RESET" : `DESIGN · ${kind.toUpperCase()} MAP ON`);
-  };
-
-  const saveDesignAsLut = async () => {
-    // Combine LUT + adj + extra into a single filter chain (extra ColorMatrix
-    // cannot be baked into .cube here because feColorMatrix requires SVG
-    // rasterization; we save the visible CSS pipeline as a custom LUT)
-    const fullFilter = composeFilter(adj, lut.filter, extraFilter, false);
-    const baseFilter = composeFilter(adj, lut.filter, "", false);
-    let cube: { text: string; data: number[] } | null = null;
-    try { cube = await filterToCube(baseFilter, 17); } catch { /* ignore */ }
-    const name = prompt("Name this LUT:", "Untitled grade");
-    if (!name) return;
-    const newLut: CustomLut = {
-      id: `design-${Date.now().toString(36)}`,
-      name,
-      family: "Editorial",
-      description: extraFilter ? `Design grade with ${extraFilter.includes("ir") ? "IR" : "UV"} channel map` : "Custom design grade.",
-      filter: fullFilter,
-      swatch: ["#2a1d3a", "#a37bbf", "#d8c1ea"],
-      source: "user-design",
-      cube: cube?.data,
-      cubeSize: 17,
-    };
-    saveCustomLut(newLut);
-    setCustomLuts(loadCustomLuts());
-    setLut(newLut);
-    setToast(`SAVED · ${name.toUpperCase()}`);
-  };
-
-  const exportCube = async () => {
-    const baseFilter = composeFilter(adj, lut.filter, "", false);
-    try {
-      const { text } = await filterToCube(baseFilter, 17);
-      downloadFile(`${lut.name.replace(/\s+/g, "_").toLowerCase()}.cube`, text, "text/plain");
-      setToast(`.CUBE · DOWNLOADED`);
-    } catch { setToast("EXPORT · FAILED"); }
-  };
-
-  /* --- EXPORT current view as PNG at native resolution --- */
+  /* --- EXPORT current view as PNG at native resolution via WebGL --- */
   const exportImage = async () => {
-    if (!imgRef.current) return;
+    if (!canvasRef.current) return;
     try {
-      const filter = composeFilter(adj, lut.filter, extraFilter, false);
       const safeName = `wildlight_${(lut.name).replace(/\s+/g, "_").toLowerCase()}_${Date.now().toString(36)}.png`;
-      await exportPng(imgRef.current, filter, safeName);
+      await canvasRef.current.exportPng(safeName);
       setToast(`EXPORTED · ${safeName}`);
     } catch (e) {
       setToast(`EXPORT · FAILED`);
@@ -173,9 +154,6 @@ export default function Cell() {
   return (
     <main className="h-screen bg-black text-[#e8dfd1] overflow-hidden relative" style={{ fontFamily: "Inter, sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet" />
-
-      {/* SVG filters for IR/UV — referenced as filter: url(#wildlight-ir) */}
-      <SvgFilterDefs />
 
       {/* hidden inputs */}
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
@@ -207,13 +185,16 @@ export default function Cell() {
             <CornerTick className="-top-4 -right-4" rot={90} />
             <CornerTick className="-bottom-4 -right-4" rot={180} />
             <CornerTick className="-bottom-4 -left-4" rot={270} />
-            <img
-              ref={imgRef}
-              src={imgSrc}
-              alt=""
-              crossOrigin="anonymous"
-              className="block max-w-full max-h-[72vh] object-contain shadow-[0_60px_120px_-30px_rgba(0,0,0,0.9)] transition-[filter] duration-150"
-              style={{ filter: composedFilter }}
+            <WebGLCanvas
+              ref={canvasRef}
+              imageUrl={imgSrc}
+              cube={("cube" in lut && lut.cube && lut.cubeSize) ? { data: lut.cube as number[], size: lut.cubeSize as number } : null}
+              filterChain={!("cube" in lut && lut.cube) ? lut.filter : undefined}
+              cubeKey={lut.id}
+              adjust={glAdjust}
+              channel="off"
+              className="block max-w-full max-h-[72vh] object-contain shadow-[0_60px_120px_-30px_rgba(0,0,0,0.9)]"
+              onError={() => setToast("WEBGL · INIT FAILED")}
             />
           </div>
         ) : (
@@ -230,9 +211,10 @@ export default function Cell() {
               <path d="M17 5v22M7 15l10-10 10 10M5 29h24" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <div className="text-center">
-              <div className="text-base tracking-[0.3em] uppercase text-white/80">DROP AN IMAGE</div>
+              <div className="text-base tracking-[0.3em] uppercase text-white/80">{loading ? "DECODING…" : "DROP AN IMAGE"}</div>
               <div className="text-[10px] tracking-[0.4em] uppercase text-stone-500 mt-2">OR CLICK · OR + IMAGE IN TOP BAR</div>
-              <div className="text-[10px] tracking-[0.4em] uppercase text-stone-600 mt-1">.JPG · .PNG · .WEBP · .HEIC</div>
+              <div className="text-[10px] tracking-[0.4em] uppercase text-stone-600 mt-1">.JPG · .PNG · .WEBP · .HEIC · .TIFF</div>
+              <div className="text-[10px] tracking-[0.4em] uppercase text-stone-700 mt-3">RAW IMPORT · PHASE 2</div>
             </div>
           </button>
         )}
@@ -260,7 +242,6 @@ export default function Cell() {
         </span>
         <span className="text-white/25 text-[10px]">·</span>
         <span className="text-[10px] tracking-[0.3em] uppercase text-white/50">{adj.intensity}%</span>
-        {extraFilter && <span className="text-[10px] tracking-[0.4em] uppercase text-violet-300 ml-1">· {extraFilter.includes("ir") ? "IR" : "UV"}</span>}
       </div>
 
       {/* ===== LEFT TOOL RAIL ===== */}
@@ -320,7 +301,7 @@ export default function Cell() {
         </button>
 
         {/* Reset */}
-        <button onClick={() => { setAdj(DEFAULT_ADJ); setExtraFilter(""); setToast("RESET"); }} className="w-12 h-9 rounded-sm bg-black/60 backdrop-blur border border-white/15 text-white/70 hover:border-white/40 text-[10px] tracking-[0.15em]" style={{ fontFamily: MONO }}>RST</button>
+        <button onClick={() => { setAdj(DEFAULT_ADJ); setToast("RESET"); }} className="w-12 h-9 rounded-sm bg-black/60 backdrop-blur border border-white/15 text-white/70 hover:border-white/40 text-[10px] tracking-[0.15em]" style={{ fontFamily: MONO }}>RST</button>
 
         {/* Export */}
         <button onClick={exportImage} className="w-12 h-12 rounded-sm bg-orange-300 hover:bg-orange-200 text-black flex flex-col items-center justify-center text-[10px] tracking-[0.15em] transition" style={{ fontFamily: MONO }}>
@@ -373,15 +354,20 @@ export default function Cell() {
           ))}
         </div>
 
-        <div className="px-5 flex flex-col items-end justify-center shrink-0 border-l border-white/10 text-right text-[10px] tracking-[0.4em] uppercase text-white/55 gap-1">
-          <div className="flex items-center gap-2 truncate max-w-[300px]">
-            <span className="text-orange-200/80 truncate">{imgLabel.toUpperCase()}</span>
+        <div className="px-5 flex flex-col items-end justify-center shrink-0 border-l border-white/10 text-right text-[10px] tracking-[0.4em] uppercase text-white/55 gap-1 max-w-[420px]">
+          <div className="flex items-center gap-2 truncate w-full justify-end">
+            {exif?.camera ? <span className="text-white/65 truncate">{exif.camera.toUpperCase()}</span> : null}
+            {exif?.lens ? <><span className="text-white/25">·</span><span className="text-white/55 truncate">{exif.lens.toUpperCase()}</span></> : null}
+            {!exif?.camera && !exif?.lens ? <span className="text-orange-200/80 truncate">{imgLabel.toUpperCase() || "NO METADATA"}</span> : null}
           </div>
-          <div className="flex items-center gap-2 text-white/45">
-            <span>EI 200</span><span className="text-white/25">·</span>
-            <span>ƒ8</span><span className="text-white/25">·</span>
-            <span>1/125</span><span className="text-white/25">·</span>
-            <span>3200K</span>
+          <div className="flex items-center gap-2 text-white/55 truncate">
+            {exifParts(exif).map((p, i) => (
+              <span key={i} className="flex items-center gap-2">
+                {i > 0 && <span className="text-white/25">·</span>}
+                <span>{p}</span>
+              </span>
+            ))}
+            {exif?.coords && <><span className="text-white/25">·</span><span className="text-white/40">{exif.coords}</span></>}
           </div>
         </div>
       </div>
@@ -411,7 +397,7 @@ export default function Cell() {
             {panel === "masks" && <MasksPanel />}
             {panel === "crop" && <CropPanel />}
             {panel === "brush" && <BrushPanel />}
-            {panel === "design" && <DesignPanel extra={extraFilter} setEffect={setDesignEffect} onSave={saveDesignAsLut} onExportCube={exportCube} />}
+            {panel === "design" && <DesignRedirect />}
             {panel === "history" && <HistoryPanel lutName={lut.name} />}
           </motion.aside>
         )}
@@ -437,22 +423,16 @@ export default function Cell() {
 
 /* ============== Helpers ============== */
 
-function composeFilter(adj: Adjust, lutFilter: string, extra: string, showOriginal: boolean): string {
-  if (showOriginal) {
-    return `brightness(${adj.exposure / 100}) contrast(${adj.contrast / 100}) saturate(${adj.saturation / 100})`;
-  }
-  const intensity = adj.intensity / 100;
-  const warmthHue = adj.warmth * -0.4;
-  const lutPart = intensity > 0 ? lutFilter : "";
-  return [
-    extra,
-    `brightness(${adj.exposure / 100})`,
-    `contrast(${adj.contrast / 100})`,
-    `saturate(${adj.saturation / 100})`,
-    `hue-rotate(${warmthHue}deg)`,
-    lutPart,
-    intensity < 1 && intensity > 0 ? `opacity(${Math.max(0.05, intensity)})` : "",
-  ].filter(Boolean).join(" ");
+function exifParts(exif: ParsedExif | null): string[] {
+  if (!exif) return ["NO METADATA"];
+  const parts: string[] = [];
+  if (exif.focal) parts.push(exif.focal);
+  if (exif.aperture) parts.push(exif.aperture);
+  if (exif.shutter) parts.push(exif.shutter);
+  if (exif.ei) parts.push(exif.ei);
+  if (exif.wb) parts.push(exif.wb);
+  if (exif.date) parts.push(exif.date);
+  return parts.length ? parts : ["NO METADATA"];
 }
 
 function fullName(id: PanelId): string {
@@ -464,41 +444,8 @@ function fullName(id: PanelId): string {
   return map[id];
 }
 
-/* ===== SVG filter definitions for IR/UV ===== */
-function SvgFilterDefs() {
-  return (
-    <svg width="0" height="0" className="absolute" aria-hidden>
-      <defs>
-        {/*
-          Aerochrome-style IR: swap red ↔ blue, push greens into magenta range,
-          boost reds for "glowing foliage" effect. ColorMatrix RGBA.
-        */}
-        <filter id="wildlight-ir">
-          <feColorMatrix type="matrix" values={`
-            0.10 0.20 1.10 0 0
-            0.40 0.10 0.10 0 0
-            1.30 -0.20 0.00 0 0
-            0.00 0.00 0.00 1 0
-          `} />
-          <feComponentTransfer><feFuncR type="gamma" amplitude="1.05" exponent="0.9" offset="0.02"/><feFuncG type="gamma" amplitude="1" exponent="1" offset="0"/><feFuncB type="gamma" amplitude="0.95" exponent="1.1" offset="0"/></feComponentTransfer>
-        </filter>
-        {/*
-          UV-fluorescence look: dark blues, lifted cyans, pushed violets in
-          highlights, deepened blacks.
-        */}
-        <filter id="wildlight-uv">
-          <feColorMatrix type="matrix" values={`
-            0.55 -0.15 0.55 0 0
-            -0.05 0.65 0.55 0 0
-            0.10 0.10 1.20 0 0
-            0.00 0.00 0.00 1 0
-          `} />
-          <feComponentTransfer><feFuncR type="gamma" amplitude="0.9" exponent="1.15" offset="0"/><feFuncG type="gamma" amplitude="0.95" exponent="1.05" offset="0"/><feFuncB type="gamma" amplitude="1.15" exponent="0.85" offset="0.03"/></feComponentTransfer>
-        </filter>
-      </defs>
-    </svg>
-  );
-}
+/* Old SVG IR/UV filter defs removed — channel matrices now live in the WebGL
+ * shader (see src/lib/lut-engine.ts). Keeping the studio panel set lean. */
 
 /* ============== Toolbar glyphs ============== */
 function GlyphGrid() { return <svg width="14" height="14"><g fill="currentColor"><rect x="1" y="1" width="5" height="5" /><rect x="8" y="1" width="5" height="5" /><rect x="1" y="8" width="5" height="5" /><rect x="8" y="8" width="5" height="5" /></g></svg>; }
@@ -601,48 +548,15 @@ function AdjustPanel({ adj, setAdj }: { adj: Adjust; setAdj: (a: Adjust) => void
   );
 }
 
-function DesignPanel({ extra, setEffect, onSave, onExportCube }: { extra: string; setEffect: (k: "none" | "ir" | "uv") => void; onSave: () => void; onExportCube: () => void }) {
-  const active = extra.includes("ir") ? "ir" : extra.includes("uv") ? "uv" : "none";
+function DesignRedirect() {
   return (
-    <div className="p-5 space-y-5">
-      <div>
-        <PanelTitle>CHANNEL MAPPING</PanelTitle>
-        <p className="text-[11px] text-white/55 leading-relaxed mb-3" style={{ fontFamily: DISPLAY, fontStyle: "italic", fontSize: "0.95rem" }}>
-          Re-route the spectrum. IR swaps red ↔ blue and pushes greens into magenta (Aerochrome-style); UV deepens skies and pulls highlights into cyan-violet.
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {([["none", "OFF"], ["ir", "INFRARED"], ["uv", "ULTRAVIOLET"]] as const).map(([k, l]) => (
-            <button
-              key={k}
-              onClick={() => setEffect(k)}
-              className={`py-3 rounded-sm text-[10px] tracking-[0.2em] uppercase border transition ${active === k ? "bg-violet-700/30 border-violet-400 text-violet-100" : "border-white/15 hover:border-white/40 text-white/60"}`}
-              style={{ fontFamily: MONO }}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <PanelTitle>RECIPE</PanelTitle>
-        <p className="text-[11px] text-white/55 leading-relaxed" style={{ fontFamily: DISPLAY, fontStyle: "italic", fontSize: "0.95rem" }}>
-          Tune Adjustments &amp; pick a base LUT to shape the grade. When you like it, save the recipe as a custom LUT, or export it to .cube for use in Lightroom, Resolve, Capture One.
-        </p>
-      </div>
-
-      <div className="space-y-2 pt-2">
-        <button onClick={onSave} className="w-full py-3 rounded-sm bg-orange-300 hover:bg-orange-200 text-black text-[10px] tracking-[0.3em] uppercase transition" style={{ fontFamily: MONO }}>
-          SAVE AS CUSTOM LUT
-        </button>
-        <button onClick={onExportCube} className="w-full py-3 rounded-sm border border-white/15 hover:border-white/40 text-[10px] tracking-[0.3em] uppercase text-white/80 transition" style={{ fontFamily: MONO }}>
-          EXPORT .CUBE ↓
-        </button>
-      </div>
-
-      <p className="text-[9px] text-white/35 leading-relaxed" style={{ fontFamily: MONO }}>
-        NOTE · IR / UV CHANNEL MAPS USE SVG FECOLORMATRIX. ACCURATE BAKING TO .CUBE REQUIRES A WEBGL RENDER STAGE (PLANNED). UNTIL THEN, EXPORTED .CUBE FILES INCLUDE THE BASE GRADE WITHOUT THE IR/UV MATRIX.
+    <div className="p-5 space-y-3">
+      <p className="text-[11px] text-white/65 leading-relaxed" style={{ fontFamily: DISPLAY, fontStyle: "italic", fontSize: "1rem" }}>
+        DESIGN is a workshop of its own — sliders, channel maps, band remaps, .cube export, all in one place.
       </p>
+      <Link href="/design" className="block w-full py-3 rounded-sm bg-violet-700/30 hover:bg-violet-700/50 border border-violet-400/40 text-violet-100 text-[10px] tracking-[0.3em] uppercase text-center transition" style={{ fontFamily: MONO }}>
+        OPEN DESIGN ↗
+      </Link>
     </div>
   );
 }
