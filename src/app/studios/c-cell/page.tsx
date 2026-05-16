@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { LUTS, type Lut } from "@/lib/luts";
-import { SAMPLE_IMAGES } from "@/lib/sample-images";
 import { CornerTick, PanelTitle, Histogram, ToneCurve } from "@/components/studio-chrome";
 import { ApertureInline } from "@/components/brand";
 import { loadCustomLuts, saveCustomLut, deleteCustomLut, parseCube, cubeToFilter, filterToCube, downloadFile, exportPng, type CustomLut } from "@/lib/lut-io";
@@ -40,8 +39,8 @@ const TOOLS: { id: PanelId; label: string; n: string; glyph: React.ReactNode; mo
 export default function Cell() {
   const [customLuts, setCustomLuts] = useState<CustomLut[]>([]);
   const [lut, setLut] = useState<Lut | CustomLut>(LUTS[7]);
-  const [imgSrc, setImgSrc] = useState<string>(SAMPLE_IMAGES[1].url);
-  const [imgLabel, setImgLabel] = useState<string>(SAMPLE_IMAGES[1].caption);
+  const [imgSrc, setImgSrc] = useState<string>("");
+  const [imgLabel, setImgLabel] = useState<string>("");
   const [panel, setPanel] = useState<PanelId>("none");
   const [adj, setAdj] = useState<Adjust>(DEFAULT_ADJ);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -194,13 +193,12 @@ export default function Cell() {
           </Link>
           <div className="w-px h-5 bg-white/10" />
           <div className="flex items-center gap-1" style={{ fontFamily: MONO }}>
-            {(["ALBUM", "DEVELOP", "GRADE", "DESIGN", "EXPORT"] as Mode[]).map((m) => (
+            {(["ALBUM", "DEVELOP", "GRADE", "EXPORT"] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => {
                   setActiveMode(m);
                   if (m === "ALBUM") setPanel("library");
-                  else if (m === "DESIGN") setPanel("design");
                   else if (m === "EXPORT") setPanel("none");
                 }}
                 className={`px-3 py-1 rounded-sm text-[10px] tracking-[0.3em] transition ${activeMode === m ? "bg-orange-700/30 text-orange-200" : "text-white/45 hover:text-white"}`}
@@ -208,6 +206,9 @@ export default function Cell() {
                 {m}
               </button>
             ))}
+            <Link href="/design" className="px-3 py-1 rounded-sm text-[10px] tracking-[0.3em] text-violet-300 hover:text-violet-100 hover:bg-violet-700/20 transition">
+              DESIGN ↗
+            </Link>
           </div>
           <div className="flex-1" />
           <button onClick={() => fileInputRef.current?.click()} className="text-[10px] tracking-[0.3em] uppercase text-white/45 hover:text-white" style={{ fontFamily: MONO }} title="Upload image">+ IMAGE</button>
@@ -217,21 +218,42 @@ export default function Cell() {
       </header>
 
       {/* ===== CANVAS ===== */}
-      <div className="absolute inset-0 pt-12 pb-20 flex items-center justify-center px-24" ref={dropZoneRef}>
-        <div className="relative max-w-[1240px] max-h-full w-full flex items-center justify-center">
-          <CornerTick className="-top-4 -left-4" rot={0} />
-          <CornerTick className="-top-4 -right-4" rot={90} />
-          <CornerTick className="-bottom-4 -right-4" rot={180} />
-          <CornerTick className="-bottom-4 -left-4" rot={270} />
-          <img
-            ref={imgRef}
-            src={imgSrc}
-            alt=""
-            crossOrigin="anonymous"
-            className="block max-w-full max-h-[72vh] object-contain shadow-[0_60px_120px_-30px_rgba(0,0,0,0.9)] transition-[filter] duration-150"
-            style={{ filter: composedFilter }}
-          />
-        </div>
+      <div className="absolute inset-0 pt-12 pb-32 flex items-center justify-center px-24" ref={dropZoneRef}>
+        {imgSrc ? (
+          <div className="relative max-w-[1240px] max-h-full w-full flex items-center justify-center">
+            <CornerTick className="-top-4 -left-4" rot={0} />
+            <CornerTick className="-top-4 -right-4" rot={90} />
+            <CornerTick className="-bottom-4 -right-4" rot={180} />
+            <CornerTick className="-bottom-4 -left-4" rot={270} />
+            <img
+              ref={imgRef}
+              src={imgSrc}
+              alt=""
+              crossOrigin="anonymous"
+              className="block max-w-full max-h-[72vh] object-contain shadow-[0_60px_120px_-30px_rgba(0,0,0,0.9)] transition-[filter] duration-150"
+              style={{ filter: composedFilter }}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="group relative w-[min(680px,80vw)] aspect-[16/10] border border-dashed border-white/15 hover:border-orange-300/60 hover:bg-white/[0.02] transition rounded-sm flex flex-col items-center justify-center gap-4"
+            style={{ fontFamily: MONO }}
+          >
+            <CornerTick className="-top-3 -left-3" rot={0} />
+            <CornerTick className="-top-3 -right-3" rot={90} />
+            <CornerTick className="-bottom-3 -right-3" rot={180} />
+            <CornerTick className="-bottom-3 -left-3" rot={270} />
+            <svg width="34" height="34" viewBox="0 0 34 34" className="text-orange-300/80 group-hover:text-orange-300 transition">
+              <path d="M17 5v22M7 15l10-10 10 10M5 29h24" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div className="text-center">
+              <div className="text-base tracking-[0.3em] uppercase text-white/80">DROP AN IMAGE</div>
+              <div className="text-[10px] tracking-[0.4em] uppercase text-stone-500 mt-2">OR CLICK · OR + IMAGE IN TOP BAR</div>
+              <div className="text-[10px] tracking-[0.4em] uppercase text-stone-600 mt-1">.JPG · .PNG · .WEBP · .HEIC</div>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* ===== TOP-RIGHT HUD ===== */}
@@ -261,47 +283,46 @@ export default function Cell() {
 
       {/* ===== LEFT TOOL RAIL ===== */}
       <nav className="absolute left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1">
-        {TOOLS.map((b) => (
-          <button
-            key={b.id}
-            onClick={() => {
-              setPanel(panel === b.id ? "none" : b.id);
-              if (b.mode) setActiveMode(b.mode);
-            }}
-            className={`group relative w-12 h-12 rounded-sm border flex items-center justify-center transition ${panel === b.id ? "bg-orange-300 text-black border-orange-300" : "bg-black/60 backdrop-blur border-white/15 hover:border-white/40 text-white/70"}`}
-            style={{ fontFamily: MONO }}
-          >
-            <div className="flex flex-col items-center">
-              {b.glyph}
-              <span className="text-[9px] tracking-[0.15em] mt-0.5">{b.label}</span>
-            </div>
-            <span className={`absolute left-full ml-2 px-2 py-1 rounded-sm whitespace-nowrap text-[10px] tracking-[0.3em] uppercase pointer-events-none transition-opacity ${panel === b.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"} bg-black/80 backdrop-blur border border-white/10 text-white/80`}>
-              {b.n} · {fullName(b.id)}
-            </span>
-          </button>
-        ))}
+        {TOOLS.map((b) => {
+          if (b.id === "design") {
+            return (
+              <Link
+                key={b.id}
+                href="/design"
+                className={`group relative w-12 h-12 rounded-sm border flex items-center justify-center transition bg-black/60 backdrop-blur border-violet-400/30 hover:border-violet-300 text-violet-300`}
+                style={{ fontFamily: MONO }}
+              >
+                <div className="flex flex-col items-center">
+                  {b.glyph}
+                  <span className="text-[9px] tracking-[0.15em] mt-0.5">{b.label}</span>
+                </div>
+                <span className="absolute left-full ml-2 px-2 py-1 rounded-sm whitespace-nowrap text-[10px] tracking-[0.3em] uppercase pointer-events-none opacity-0 group-hover:opacity-100 bg-black/80 backdrop-blur border border-white/10 text-violet-200">
+                  {b.n} · DESIGN PAGE ↗
+                </span>
+              </Link>
+            );
+          }
+          return (
+            <button
+              key={b.id}
+              onClick={() => setPanel(panel === b.id ? "none" : b.id)}
+              className={`group relative w-12 h-12 rounded-sm border flex items-center justify-center transition ${panel === b.id ? "bg-orange-300 text-black border-orange-300" : "bg-black/60 backdrop-blur border-white/15 hover:border-white/40 text-white/70"}`}
+              style={{ fontFamily: MONO }}
+            >
+              <div className="flex flex-col items-center">
+                {b.glyph}
+                <span className="text-[9px] tracking-[0.15em] mt-0.5">{b.label}</span>
+              </div>
+              <span className={`absolute left-full ml-2 px-2 py-1 rounded-sm whitespace-nowrap text-[10px] tracking-[0.3em] uppercase pointer-events-none transition-opacity ${panel === b.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"} bg-black/80 backdrop-blur border border-white/10 text-white/80`}>
+                {b.n} · {fullName(b.id)}
+              </span>
+            </button>
+          );
+        })}
       </nav>
 
       {/* ===== RIGHT TOOLBAR ===== */}
       <aside className="absolute right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-end gap-2">
-        {/* Intensity slider */}
-        <div className="w-12 h-52 rounded-sm bg-black/60 backdrop-blur border border-white/15 p-2 flex flex-col items-center" style={{ fontFamily: MONO }}>
-          <span className="text-[8px] tracking-[0.2em] text-white/40 mb-2">INT</span>
-          <div className="flex-1 w-1.5 bg-stone-800 rounded-full relative flex items-end">
-            <div className="absolute bottom-0 inset-x-0 bg-orange-300 rounded-full" style={{ height: `${adj.intensity}%` }} />
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={adj.intensity}
-              onChange={(e) => setAdj({ ...adj, intensity: parseInt(e.target.value) })}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              style={{ writingMode: "vertical-lr" as React.CSSProperties["writingMode"], WebkitAppearance: "slider-vertical" }}
-            />
-          </div>
-          <span className="text-[9px] text-white/80 mt-2">{adj.intensity}</span>
-        </div>
-
         {/* Hold to compare */}
         <button
           onMouseDown={() => setShowOriginal(true)}
@@ -325,6 +346,22 @@ export default function Cell() {
           <span className="mt-0.5">EXP</span>
         </button>
       </aside>
+
+      {/* ===== INTENSITY STRIP ===== */}
+      <div className="absolute bottom-20 inset-x-0 z-30 bg-black/55 backdrop-blur-md border-t border-white/5" style={{ fontFamily: MONO }}>
+        <div className="px-6 lg:px-10 py-2.5 flex items-center gap-4">
+          <span className="text-[10px] tracking-[0.4em] uppercase text-white/55 shrink-0">INTENSITY</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={adj.intensity}
+            onChange={(e) => setAdj({ ...adj, intensity: parseInt(e.target.value) })}
+            className="flex-1 accent-orange-300 cursor-pointer h-1"
+          />
+          <span className="text-[10px] tracking-[0.3em] uppercase text-orange-200/90 w-12 text-right">{adj.intensity}%</span>
+        </div>
+      </div>
 
       {/* ===== BOTTOM DOCK ===== */}
       <div className="absolute bottom-0 inset-x-0 z-30 bg-black/70 backdrop-blur-md border-t border-white/10 h-20 flex items-stretch" style={{ fontFamily: MONO }}>
@@ -494,22 +531,23 @@ function GlyphClock() { return <svg width="14" height="14" fill="none" stroke="c
 function GlyphDesign() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 12 L8 6 L12 10" /><circle cx="11" cy="3" r="1.5" fill="currentColor" /></svg>; }
 
 /* ============== Panels ============== */
-function LibraryPanel({ imgSrc, setImg, onUpload }: { imgSrc: string; setImg: (url: string, label: string) => void; onUpload: () => void }) {
+function LibraryPanel({ imgSrc, onUpload }: { imgSrc: string; setImg: (url: string, label: string) => void; onUpload: () => void }) {
   return (
     <div className="p-5">
-      <PanelTitle n="240">CATALOG</PanelTitle>
-      <button onClick={onUpload} className="w-full mb-3 rounded-sm border border-dashed border-white/20 hover:border-orange-300/60 hover:bg-white/5 transition p-4 text-[10px] tracking-[0.3em] uppercase text-white/70 flex flex-col items-center gap-1.5" style={{ fontFamily: MONO }}>
-        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10M3 7l5-5 5 5M2 14h12" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <PanelTitle>YOUR ALBUM</PanelTitle>
+      <button onClick={onUpload} className="w-full rounded-sm border border-dashed border-white/20 hover:border-orange-300/60 hover:bg-white/5 transition p-6 text-[10px] tracking-[0.3em] uppercase text-white/70 flex flex-col items-center gap-2" style={{ fontFamily: MONO }}>
+        <svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 2v14M4 9l6-6 6 6M3 18h14" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
         UPLOAD · OR DRAG ANYWHERE
       </button>
-      <div className="grid grid-cols-2 gap-1.5">
-        {SAMPLE_IMAGES.map((s, i) => (
-          <button key={s.id} onClick={() => setImg(s.url, s.caption)} className={`relative aspect-[4/3] overflow-hidden ring-1 ${s.url === imgSrc ? "ring-orange-300 ring-2" : "ring-white/10 hover:ring-white/30"}`}>
-            <img src={s.url} alt="" className="w-full h-full object-cover" />
-            <span className="absolute bottom-0.5 right-1 text-[8px] text-white/80" style={{ fontFamily: MONO }}>{String(i + 1).padStart(3, "0")}</span>
-          </button>
-        ))}
-      </div>
+      {imgSrc ? (
+        <p className="mt-4 text-[10px] tracking-[0.3em] uppercase text-stone-500 leading-relaxed" style={{ fontFamily: MONO }}>
+          1 IMAGE LOADED · DROP ANOTHER TO REPLACE
+        </p>
+      ) : (
+        <p className="mt-4 text-[10px] tracking-[0.3em] uppercase text-stone-500 leading-relaxed" style={{ fontFamily: MONO }}>
+          NO IMAGE LOADED · YOUR FILES STAY LOCAL · NOTHING IS UPLOADED OFF-DEVICE
+        </p>
+      )}
     </div>
   );
 }

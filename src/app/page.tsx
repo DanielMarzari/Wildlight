@@ -361,8 +361,8 @@ function TopBar() {
         <div className="hidden md:flex items-center gap-8 text-[10px] tracking-[0.4em] uppercase text-stone-400" style={{ fontFamily: MONO }}>
           <Link href="/album" className="hover:text-white transition">ALBUM</Link>
           <Link href="/atelier" className="hover:text-white transition">ATELIER</Link>
+          <Link href="/design" className="hover:text-white transition">DESIGN</Link>
           <Link href="/studios/c-cell" className="hover:text-white transition">STUDIO</Link>
-          <a href="#process" className="hover:text-white transition">PROCESS</a>
         </div>
         <Link href="/studios/c-cell" className="text-[10px] tracking-[0.4em] uppercase border border-white/15 hover:border-white/40 px-4 py-2 rounded-sm transition text-white/90" style={{ fontFamily: MONO }}>
           OPEN STUDIO →
