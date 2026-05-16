@@ -15,6 +15,21 @@ type Channel = "off" | "ir" | "uv";
 type Family = (typeof FAMILIES)[number];
 const FAMILIES = ["Cinematic", "Portrait", "Landscape", "Mono", "Travel", "Editorial"] as const;
 
+/** A band → band hue remap (e.g. shift greens toward cyan at 70%) */
+type BandMap = { id: string; source: BandKey; target: BandKey; amount: number };
+type BandKey = "red" | "orange" | "yellow" | "green" | "cyan" | "blue" | "purple" | "magenta";
+
+const BANDS: { key: BandKey; label: string; hue: number; color: string }[] = [
+  { key: "red",     label: "RED",     hue: 0,   color: "#d6452f" },
+  { key: "orange",  label: "ORANGE",  hue: 30,  color: "#d68a3e" },
+  { key: "yellow",  label: "YELLOW",  hue: 55,  color: "#d8c15a" },
+  { key: "green",   label: "GREEN",   hue: 120, color: "#6b9e6b" },
+  { key: "cyan",    label: "CYAN",    hue: 180, color: "#5fa7b6" },
+  { key: "blue",    label: "BLUE",    hue: 220, color: "#5a6ec5" },
+  { key: "purple",  label: "PURPLE",  hue: 270, color: "#9a6cc5" },
+  { key: "magenta", label: "MAGENTA", hue: 310, color: "#c45a9c" },
+];
+
 type State = {
   /** Optional base LUT to start from (or null to design from scratch) */
   baseLut: string | null;
@@ -26,6 +41,7 @@ type State = {
   sepia: number;  // 0..40
   hue: number;    // -30..+30 deg
   grayscale: number; // 0..100
+  bandMaps: BandMap[];
 };
 
 const DEFAULT: State = {
@@ -34,6 +50,7 @@ const DEFAULT: State = {
   liftR: 0, liftG: 0, liftB: 0,
   gainR: 0, gainG: 0, gainB: 0,
   fade: 0, sepia: 0, hue: 0, grayscale: 0,
+  bandMaps: [],
 };
 
 const SWATCH_PRESETS: { name: string; colors: [string, string, string] }[] = [
@@ -114,7 +131,7 @@ export default function DesignPage() {
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])} />
 
       {/* Nav */}
-      <header className="sticky top-0 z-30 backdrop-blur bg-black/40 border-b border-white/5">
+      <header className="fixed top-0 inset-x-0 z-30 backdrop-blur bg-black/40 border-b border-white/5">
         <nav className="h-14 px-6 lg:px-12 flex items-center justify-between">
           <Link href="/" className="hover:opacity-80 transition">
             <ApertureInline size={20} color="#e8dfd1" textClass="text-base" />
@@ -130,7 +147,7 @@ export default function DesignPage() {
       </header>
 
       {/* Masthead */}
-      <section className="px-8 lg:px-16 py-12 border-b border-stone-900">
+      <section className="px-8 lg:px-16 pt-28 pb-12 border-b border-stone-900">
         <div className="flex items-end justify-between flex-wrap gap-6">
           <div>
             <div className="text-[10px] tracking-[0.4em] uppercase text-violet-300/80 mb-3" style={{ fontFamily: MONO }}>DESIGN · LUT WORKSHOP</div>
@@ -203,6 +220,14 @@ export default function DesignPage() {
               UV · DEEP BLUES · CYAN-VIOLET HIGHLIGHTS
             </p>
           </ToolSection>
+
+          {/* Spectrum remap */}
+          <BandRemapSection
+            bandMaps={state.bandMaps}
+            onAdd={(m) => setState({ ...state, bandMaps: [...state.bandMaps, m] })}
+            onUpdate={(id, patch) => setState({ ...state, bandMaps: state.bandMaps.map((m) => m.id === id ? { ...m, ...patch } : m) })}
+            onRemove={(id) => setState({ ...state, bandMaps: state.bandMaps.filter((m) => m.id !== id) })}
+          />
 
           {/* Tone */}
           <ToolSection title="TONE">
@@ -367,6 +392,33 @@ function composeDesignFilter(s: State): string {
   if (s.sepia > 0) parts.push(`sepia(${s.sepia / 100})`);
   if (s.grayscale > 0) parts.push(`grayscale(${s.grayscale / 100})`);
 
+  // Band remaps — each map contributes a weighted hue rotation in the direction
+  // of (target.hue - source.hue). Multiple maps stack and average; we also
+  // bump saturation slightly to make the remapped band more visible.
+  // Full pixel-accurate per-band remapping requires a WebGL pipeline; this is
+  // the closest workable CSS approximation.
+  if (s.bandMaps.length > 0) {
+    let totalDelta = 0;
+    let totalWeight = 0;
+    for (const m of s.bandMaps) {
+      const src = BANDS.find((b) => b.key === m.source)!;
+      const dst = BANDS.find((b) => b.key === m.target)!;
+      let delta = dst.hue - src.hue;
+      // shortest path around the hue wheel
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      const w = m.amount / 100;
+      totalDelta += delta * w;
+      totalWeight += w;
+    }
+    if (totalWeight > 0) {
+      const avg = totalDelta / Math.max(1, totalWeight);
+      const intensity = Math.min(1, totalWeight / s.bandMaps.length);
+      parts.push(`hue-rotate(${(avg * intensity * 0.45).toFixed(2)}deg)`);
+      if (intensity > 0.3) parts.push(`saturate(${(1 + intensity * 0.15).toFixed(3)})`);
+    }
+  }
+
   // base LUT
   if (s.baseLut) {
     const base: Lut | undefined = LUTS.find((l) => l.id === s.baseLut);
@@ -382,6 +434,111 @@ function composeDesignFilter(s: State): string {
   }
 
   return parts.filter(Boolean).join(" ");
+}
+
+function BandRemapSection({ bandMaps, onAdd, onUpdate, onRemove }: { bandMaps: BandMap[]; onAdd: (m: BandMap) => void; onUpdate: (id: string, patch: Partial<BandMap>) => void; onRemove: (id: string) => void }) {
+  const [src, setSrc] = useState<BandKey>("green");
+  const [dst, setDst] = useState<BandKey>("cyan");
+  const [amount, setAmount] = useState(70);
+
+  const add = () => {
+    if (src === dst) return;
+    onAdd({ id: `m-${Date.now().toString(36)}`, source: src, target: dst, amount });
+  };
+
+  return (
+    <div className="border-b border-stone-900 p-5">
+      <PanelTitle n="HSL REMAP">SPECTRUM REMAP</PanelTitle>
+
+      {/* Spectrum bar */}
+      <div className="h-3 mb-4 rounded-sm overflow-hidden flex">
+        {BANDS.map((b) => <span key={b.key} className="flex-1" style={{ background: b.color }} />)}
+      </div>
+
+      {/* Source */}
+      <div className="text-[9px] tracking-[0.4em] uppercase text-stone-500 mb-1.5" style={{ fontFamily: MONO }}>SOURCE BAND</div>
+      <div className="grid grid-cols-8 gap-1 mb-3">
+        {BANDS.map((b) => (
+          <button
+            key={b.key}
+            onClick={() => setSrc(b.key)}
+            className={`aspect-square rounded-sm border transition ${src === b.key ? "border-orange-300 ring-1 ring-orange-300" : "border-white/10 hover:border-white/30"}`}
+            style={{ background: b.color, opacity: src === b.key ? 1 : 0.55 }}
+            title={b.label}
+            aria-label={`Source: ${b.label}`}
+          />
+        ))}
+      </div>
+
+      {/* Target */}
+      <div className="text-[9px] tracking-[0.4em] uppercase text-stone-500 mb-1.5" style={{ fontFamily: MONO }}>TARGET BAND</div>
+      <div className="grid grid-cols-8 gap-1 mb-3">
+        {BANDS.map((b) => (
+          <button
+            key={b.key}
+            onClick={() => setDst(b.key)}
+            className={`aspect-square rounded-sm border transition ${dst === b.key ? "border-violet-300 ring-1 ring-violet-300" : "border-white/10 hover:border-white/30"}`}
+            style={{ background: b.color, opacity: dst === b.key ? 1 : 0.55 }}
+            title={b.label}
+            aria-label={`Target: ${b.label}`}
+          />
+        ))}
+      </div>
+
+      {/* Amount */}
+      <div className="mb-3">
+        <div className="flex items-baseline justify-between mb-1">
+          <span className="text-[11px] text-stone-300">Amount</span>
+          <span className="text-[10px] text-white/60" style={{ fontFamily: MONO }}>{amount}%</span>
+        </div>
+        <input type="range" min={0} max={100} value={amount} onChange={(e) => setAmount(parseInt(e.target.value))} className="w-full accent-orange-300 cursor-pointer" />
+      </div>
+
+      {/* Add */}
+      <button
+        onClick={add}
+        disabled={src === dst}
+        className="w-full py-2.5 rounded-sm border border-white/15 hover:border-orange-300 hover:bg-orange-300/10 transition text-[10px] tracking-[0.3em] uppercase text-white/80 disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{ fontFamily: MONO }}
+      >
+        + ADD MAP · {BANDS.find((b) => b.key === src)!.label} → {BANDS.find((b) => b.key === dst)!.label}
+      </button>
+
+      {/* Active maps */}
+      {bandMaps.length > 0 && (
+        <div className="mt-5 space-y-2">
+          <div className="text-[9px] tracking-[0.4em] uppercase text-stone-500" style={{ fontFamily: MONO }}>ACTIVE MAPS · {bandMaps.length}</div>
+          {bandMaps.map((m) => {
+            const s = BANDS.find((b) => b.key === m.source)!;
+            const t = BANDS.find((b) => b.key === m.target)!;
+            return (
+              <div key={m.id} className="group flex items-center gap-2 p-2 rounded-sm bg-white/[0.03] border border-white/5">
+                <span className="w-3 h-5 rounded-sm shrink-0" style={{ background: s.color }} />
+                <span className="text-white/40 text-xs">→</span>
+                <span className="w-3 h-5 rounded-sm shrink-0" style={{ background: t.color }} />
+                <div className="flex-1 min-w-0 text-[10px] tracking-[0.3em] uppercase text-white/70" style={{ fontFamily: MONO }}>
+                  {s.label} → {t.label}
+                </div>
+                <input
+                  type="range"
+                  min={0} max={100}
+                  value={m.amount}
+                  onChange={(e) => onUpdate(m.id, { amount: parseInt(e.target.value) })}
+                  className="w-20 accent-orange-300 cursor-pointer"
+                />
+                <span className="text-[10px] text-white/55 w-9 text-right" style={{ fontFamily: MONO }}>{m.amount}%</span>
+                <button onClick={() => onRemove(m.id)} className="opacity-30 group-hover:opacity-100 text-white/60 hover:text-white shrink-0 transition" title="Remove">✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="mt-4 text-[10px] text-white/40 leading-relaxed" style={{ fontFamily: MONO }}>
+        APPROXIMATE PER-BAND HUE REMAP · STACKS UP TO 8 MAPS · FULL PIXEL-ACCURATE WIRING ON THE WEBGL ROADMAP
+      </p>
+    </div>
+  );
 }
 
 function ToolSection({ title, n, children }: { title: string; n?: string; children: React.ReactNode }) {

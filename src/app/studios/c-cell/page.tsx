@@ -10,7 +10,6 @@ import { loadCustomLuts, saveCustomLut, deleteCustomLut, parseCube, cubeToFilter
 const MONO = "'IBM Plex Mono', monospace";
 const DISPLAY = '"Cormorant Garamond", "Cormorant", Georgia, serif';
 
-type Mode = "ALBUM" | "DEVELOP" | "GRADE" | "DESIGN" | "EXPORT";
 type PanelId = "none" | "library" | "luts" | "adjust" | "hsl" | "curves" | "masks" | "crop" | "brush" | "history" | "design";
 
 type Adjust = {
@@ -23,7 +22,7 @@ type Adjust = {
 
 const DEFAULT_ADJ: Adjust = { exposure: 100, contrast: 100, saturation: 100, warmth: 0, intensity: 100 };
 
-const TOOLS: { id: PanelId; label: string; n: string; glyph: React.ReactNode; mode?: Mode }[] = [
+const TOOLS: { id: PanelId; label: string; n: string; glyph: React.ReactNode }[] = [
   { id: "library", label: "ALB", n: "01", glyph: <GlyphGrid /> },
   { id: "luts",    label: "LUT", n: "02", glyph: <GlyphStripes /> },
   { id: "adjust",  label: "ADJ", n: "03", glyph: <GlyphSliders /> },
@@ -32,7 +31,7 @@ const TOOLS: { id: PanelId; label: string; n: string; glyph: React.ReactNode; mo
   { id: "masks",   label: "MSK", n: "06", glyph: <GlyphMask /> },
   { id: "crop",    label: "CRP", n: "07", glyph: <GlyphCrop /> },
   { id: "brush",   label: "BRH", n: "08", glyph: <GlyphBrush /> },
-  { id: "design",  label: "DSN", n: "09", glyph: <GlyphDesign />, mode: "DESIGN" },
+  { id: "design",  label: "DSN", n: "09", glyph: <GlyphDesign /> },
   { id: "history", label: "HIS", n: "10", glyph: <GlyphClock /> },
 ];
 
@@ -44,7 +43,6 @@ export default function Cell() {
   const [panel, setPanel] = useState<PanelId>("none");
   const [adj, setAdj] = useState<Adjust>(DEFAULT_ADJ);
   const [showOriginal, setShowOriginal] = useState(false);
-  const [activeMode, setActiveMode] = useState<Mode>("GRADE");
   const [extraFilter, setExtraFilter] = useState<string>(""); // for DESIGN: IR/UV effects
   const [toast, setToast] = useState<string | null>(null);
 
@@ -185,35 +183,19 @@ export default function Cell() {
 
       {/* ===== TOP BAR ===== */}
       <header className="absolute top-0 inset-x-0 z-50 backdrop-blur bg-black/50 border-b border-white/10">
-        <nav className="h-12 px-4 lg:px-6 flex items-center gap-4">
-          <Link href="/" className="text-[10px] tracking-[0.4em] uppercase text-stone-400 hover:text-white" style={{ fontFamily: MONO }}>← HOME</Link>
+        <nav className="h-12 px-4 lg:px-6 flex items-center gap-4" style={{ fontFamily: MONO }}>
+          <Link href="/" className="text-[10px] tracking-[0.4em] uppercase text-stone-400 hover:text-white">← HOME</Link>
           <div className="w-px h-5 bg-white/10" />
           <Link href="/" className="hover:opacity-80 transition">
             <ApertureInline size={18} color="#e8dfd1" textClass="text-sm" />
           </Link>
           <div className="w-px h-5 bg-white/10" />
-          <div className="flex items-center gap-1" style={{ fontFamily: MONO }}>
-            {(["ALBUM", "DEVELOP", "GRADE", "EXPORT"] as Mode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => {
-                  setActiveMode(m);
-                  if (m === "ALBUM") setPanel("library");
-                  else if (m === "EXPORT") setPanel("none");
-                }}
-                className={`px-3 py-1 rounded-sm text-[10px] tracking-[0.3em] transition ${activeMode === m ? "bg-orange-700/30 text-orange-200" : "text-white/45 hover:text-white"}`}
-              >
-                {m}
-              </button>
-            ))}
-            <Link href="/design" className="px-3 py-1 rounded-sm text-[10px] tracking-[0.3em] text-violet-300 hover:text-violet-100 hover:bg-violet-700/20 transition">
-              DESIGN ↗
-            </Link>
-          </div>
+          <span className="text-[10px] tracking-[0.4em] uppercase text-orange-200/80">STUDIO · C · CELL</span>
           <div className="flex-1" />
-          <button onClick={() => fileInputRef.current?.click()} className="text-[10px] tracking-[0.3em] uppercase text-white/45 hover:text-white" style={{ fontFamily: MONO }} title="Upload image">+ IMAGE</button>
-          <button onClick={() => cubeInputRef.current?.click()} className="text-[10px] tracking-[0.3em] uppercase text-white/45 hover:text-white" style={{ fontFamily: MONO }} title="Import .cube LUT">+ .CUBE</button>
-          <button onClick={exportImage} className="text-[10px] tracking-[0.3em] uppercase text-orange-200 hover:text-orange-100" style={{ fontFamily: MONO }} title="Export PNG">EXPORT PNG ↓</button>
+          <button onClick={() => fileInputRef.current?.click()} className="text-[10px] tracking-[0.3em] uppercase text-white/55 hover:text-white" title="Upload image">+ IMAGE</button>
+          <button onClick={() => cubeInputRef.current?.click()} className="text-[10px] tracking-[0.3em] uppercase text-white/55 hover:text-white" title="Import .cube LUT">+ .CUBE</button>
+          <Link href="/design" className="text-[10px] tracking-[0.3em] uppercase text-violet-300 hover:text-violet-100">DESIGN ↗</Link>
+          <button onClick={exportImage} className="text-[10px] tracking-[0.3em] uppercase text-orange-200 hover:text-orange-100" title="Export PNG">EXPORT PNG ↓</button>
         </nav>
       </header>
 
