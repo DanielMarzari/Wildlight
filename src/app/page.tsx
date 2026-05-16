@@ -360,6 +360,7 @@ function TopBar() {
         </Link>
         <div className="hidden md:flex items-center gap-8 text-[10px] tracking-[0.4em] uppercase text-stone-400" style={{ fontFamily: MONO }}>
           <Link href="/album" className="hover:text-white transition">ALBUM</Link>
+          <Link href="/guide" className="hover:text-white transition">GUIDE</Link>
           <Link href="/atelier" className="hover:text-white transition">ATELIER</Link>
           <Link href="/design" className="hover:text-white transition">DESIGN</Link>
           <Link href="/studios/c-cell" className="hover:text-white transition">STUDIO</Link>
@@ -385,7 +386,9 @@ function Footer() {
         <div className="text-right text-[10px] tracking-[0.4em] uppercase text-stone-400" style={{ fontFamily: MONO }}>
           <div className="space-y-2">
             <Link href="/album" className="block hover:text-white transition">ALBUM</Link>
+            <Link href="/guide" className="block hover:text-white transition">GUIDE</Link>
             <Link href="/atelier" className="block hover:text-white transition">ATELIER</Link>
+            <Link href="/design" className="block hover:text-white transition">DESIGN</Link>
             <Link href="/studios/c-cell" className="block hover:text-white transition">STUDIO</Link>
             <Link href="/logos" className="block hover:text-white transition">LOGOS</Link>
           </div>

@@ -176,6 +176,7 @@ export default function DesignPage() {
           </Link>
           <div className="hidden md:flex items-center gap-8 text-[10px] tracking-[0.4em] uppercase text-stone-400" style={{ fontFamily: MONO }}>
             <Link href="/album" className="hover:text-white transition">ALBUM</Link>
+            <Link href="/guide" className="hover:text-white transition">GUIDE</Link>
             <Link href="/atelier" className="hover:text-white transition">ATELIER</Link>
             <Link href="/design" className="text-white transition">DESIGN</Link>
             <Link href="/studios/c-cell" className="hover:text-white transition">STUDIO</Link>
