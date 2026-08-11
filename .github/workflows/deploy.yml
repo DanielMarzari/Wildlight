@@ -23,8 +23,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Join Tailscale
-        uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
           tags: tag:ci
@@ -34,11 +32,11 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>&1 || true
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
       - name: Ensure remote dir
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts_tailnet ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             'mkdir -p /var/www/apps/wildlight/.next/static /var/www/apps/wildlight/public'
 
       - name: Rsync standalone
@@ -46,14 +44,14 @@ jobs:
           rsync -avz --delete \
             --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' \
             --exclude='.next/static/' --exclude='public/' \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts_tailnet" \
+            -e "ssh -i ~/.ssh/deploy_key" \
             .next/standalone/ \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/apps/wildlight/
 
       - name: Rsync static
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts_tailnet" \
+            -e "ssh -i ~/.ssh/deploy_key" \
             .next/static/ \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/apps/wildlight/.next/static/
 
@@ -61,15 +59,16 @@ jobs:
         run: |
           if [ -d "public" ]; then
             rsync -avz --delete \
-              -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts_tailnet" \
+              -e "ssh -i ~/.ssh/deploy_key" \
               public/ \
               ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/apps/wildlight/public/
           fi
 
       - name: Restart PM2
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts_tailnet ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && cd /var/www/apps && (pm2 restart ecosystem.config.js --only wildlight --update-env || pm2 start ecosystem.config.js --only wildlight) && pm2 save'
+
 
 
 
